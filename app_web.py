@@ -60,12 +60,22 @@ with aba1:
                 st.success("Publicado!")
 
 # --- ABA 2: RELATÓRIO ---
+# --- ABA 2: RELATÓRIO ---
+# --- ABA 2: RELATÓRIO ---
+# --- ABA 2: RELATÓRIO ---
 with aba2:
     if not df_votos.empty:
         dict_eleit = {str(c['nome']).strip(): (c['eleitorado'] if c['eleitorado'] else 1000) for c in lista_cidades}
         df_votos['cidade'] = df_votos['cidade'].astype(str).str.strip()
-        meta = df_votos['cidade'].str.split('-', expand=True)
-        df_votos['Proj'], df_votos['Loc'], df_votos['Data'] = meta[0], meta[1], meta[2]
+        
+        def extrair_meta(nome):
+            partes = nome.split('-')
+            proj = partes[0] if len(partes) > 0 else "?"
+            loc = partes[1] if len(partes) > 1 else "?"
+            data = partes[2] if len(partes) > 2 else "?"
+            return pd.Series([proj, loc, data])
+
+        df_votos[['Proj', 'Loc', 'Data']] = df_votos['cidade'].apply(extrair_meta)
 
         col1, col2, col3 = st.columns(3)
         with col1: p_sel = st.selectbox("Projeto", sorted(df_votos['Proj'].unique()))
@@ -78,14 +88,12 @@ with aba2:
         if not df_f.empty:
             st.divider()
             
-            # Processamento da Tabela
             ct = df_f.groupby(['Loc', 'cidade', 'resposta']).size().reset_index(name='v')
             tt = df_f.groupby(['Loc', 'cidade']).size().reset_index(name='t')
             df_m = pd.merge(ct, tt, on=['Loc', 'cidade'])
             df_m['%'] = (df_m['v'] / df_m['t']) * 100
             tabela = df_m.pivot(index='Loc', columns='resposta', values='%').fillna(0)
             
-            # Média Ponderada
             cidades_ativas = df_f['cidade'].unique()
             total_e = sum(int(dict_eleit.get(cid, 1000)) for cid in cidades_ativas)
             ponderada = {}
@@ -93,25 +101,27 @@ with aba2:
                 soma_p = sum(tabela.loc[loc, col] * int(dict_eleit.get(df_f[df_f['Loc'] == loc]['cidade'].iloc[0], 1000)) for loc in tabela.index)
                 ponderada[col] = (soma_p / total_e) if total_e > 0 else 0
             
-            # Formatação da Tabela
             tab_final = pd.concat([tabela, pd.DataFrame([ponderada], index=['TOTAL PONDERADO'])])
-            tab_final.index.name = "REGIÃO" # Define o título da primeira coluna
             
-            # Exibição na Tela
+            # EXIBIÇÃO NA TELA
             if os.path.exists("logo.png"): st.image("logo.png")
             st.write(f"### QUESTÃO: {q_sel}")
             st.table(tab_final.style.format("{:.1f}%"))
-            fig = px.bar(pd.DataFrame(list(ponderada.items()), columns=['Opção', '%']), x='Opção', y='%', text_auto='.1f%')
+            
+            df_graf = pd.DataFrame(list(ponderada.items()), columns=['Opção', 'Votos %'])
+            fig = px.bar(df_graf, x='Opção', y='Votos %', text=df_graf['Votos %'].apply(lambda x: f'{x:.1f}%'))
+            fig.update_layout(yaxis=dict(range=[0, 110]), template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- SISTEMA DE EXPORTAÇÃO ---
-            st.markdown("---")
+            # --- EXPORTAÇÃO HTML CORRIGIDA ---
             logo_base64 = get_base64_image("logo.png")
             chart_data = pd.DataFrame(list(ponderada.items()), columns=['label', 'value'])
             chart_json = json.dumps(chart_data.to_dict(orient='records'))
-
-            # Tabela em HTML com formatação de porcentagem
+            
+            # Solução definitiva: Renomear o índice e usar o index_label no to_html
             tabela_html = tab_final.style.format("{:.1f}%").to_html(classes="table")
+            # Ajuste CSS para a primeira célula do cabeçalho aparecer como "REGIÃO"
+            tabela_html = tabela_html.replace('<th class="blank level0" >&nbsp;</th>', '<th class="index_name level0">REGIÃO</th>')
 
             html_relatorio = f"""
             <html>
@@ -122,7 +132,7 @@ with aba2:
                     body {{ font-family: sans-serif; padding: 30px; color: black; background: white; }}
                     .logo-container {{ text-align: center; margin-bottom: 20px; }}
                     .logo-container img {{ max-width: 450px; }}
-                    .pergunta-header {{ font-size: 18px; font-weight: bold; text-align: left; margin: 25px 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }}
+                    .pergunta-header {{ font-size: 18px; font-weight: bold; margin: 25px 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }}
                     table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }}
                     th, td {{ border: 1px solid #000; padding: 8px; text-align: center; }}
                     th {{ background: #eeeeee; font-weight: bold; }}
@@ -130,48 +140,24 @@ with aba2:
                 </style>
             </head>
             <body>
-                <div class="logo-container">
-                    <img src="data:image/png;base64,{logo_base64}">
-                </div>
+                <div class="logo-container"><img src="data:image/png;base64,{logo_base64}"></div>
                 <div class="pergunta-header">QUESTÃO: {q_sel}</div>
-                
                 {tabela_html}
-                
                 <div id="grafico" style="width:100%; height:400px; margin-top:30px;"></div>
-                
                 <div class="footer-legal">
-                    <b>ATENÇÃO:</b> De acordo com o Artigo 33 da Resolução n. 20.101 do Código Eleitoral, o resultado desta Pesquisa só poderá ser divulgado com autorização prévia do TRE.<br>
-                    <b>Eleitorado total base desta amostragem: {total_e} pessoas.</b>
+                    <b>ATENÇÃO:</b> ATENÇÃO : De acordo com o Artigo 33 da Resolução n. 20.101 do Código Eleitoral, o resultado desta Pesquisa só poderá ser divulgado com autorização prévia do TRE.<br>
+                    <b>Eleitorado total base: {total_e} pessoas.</b>
                 </div>
-                
                 <script>
                     var data = {chart_json};
                     var labels = data.map(d => d.label);
                     var values = data.map(d => d.value);
-                    
-                    var trace = {{
-                        x: labels, y: values, type: 'bar',
-                        text: values.map(v => v.toFixed(1) + '%'), textposition: 'outside',
-                        marker: {{ color: '#0078D4' }}
-                    }};
-                    
-                    var layout = {{
-                        title: 'Resultado Consolidado Ponderado',
-                        yaxis: {{ ticksuffix: '%', range: [0, 110] }},
-                        margin: {{ t: 50 }}
-                    }};
-                    
-                    Plotly.newPlot('grafico', [trace], layout).then(function() {{
-                        setTimeout(function() {{ window.print(); }}, 800);
-                    }});
+                    var trace = {{ x: labels, y: values, type: 'bar', text: values.map(v => v.toFixed(1) + '%'), textposition: 'outside', marker: {{ color: '#0078D4' }} }};
+                    var layout = {{ title: 'Resultado Ponderado', yaxis: {{ ticksuffix: '%', range: [0, 110] }} }};
+                    Plotly.newPlot('grafico', [trace], layout).then(function() {{ setTimeout(function() {{ window.print(); }}, 800); }});
                 </script>
             </body>
             </html>
             """
             
-            st.download_button(
-                label="📥 Baixar Relatório Final para Impressão",
-                data=html_relatorio,
-                file_name=f"Relatorio_{p_sel}_{d_sel}.html",
-                mime="text/html"
-            )
+            st.download_button(label="📥 Baixar Relatório para Impressão", data=html_relatorio, file_name=f"Relatorio_{p_sel}.html", mime="text/html")
