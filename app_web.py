@@ -63,19 +63,17 @@ with aba1:
 # --- ABA 2: RELATÓRIO ---
 # --- ABA 2: RELATÓRIO ---
 # --- ABA 2: RELATÓRIO ---
+# --- ABA 2: RELATÓRIO ---
 with aba2:
     if not df_votos.empty:
         dict_eleit = {str(c['nome']).strip(): (c['eleitorado'] if c['eleitorado'] else 1000) for c in lista_cidades}
         df_votos['cidade'] = df_votos['cidade'].astype(str).str.strip()
         
-        def extrair_meta(nome):
-            partes = nome.split('-')
-            proj = partes[0] if len(partes) > 0 else "?"
-            loc = partes[1] if len(partes) > 1 else "?"
-            data = partes[2] if len(partes) > 2 else "?"
-            return pd.Series([proj, loc, data])
-
-        df_votos[['Proj', 'Loc', 'Data']] = df_votos['cidade'].apply(extrair_meta)
+        # FORMA CORRIGIDA PARA O STREAMLIT CLOUD (Split nativo)
+        df_meta = df_votos['cidade'].str.split('-', expand=True)
+        df_votos['Proj'] = df_meta[0].fillna('?')
+        df_votos['Loc'] = df_meta[1].fillna('?')
+        df_votos['Data'] = df_meta[2].fillna('?')
 
         col1, col2, col3 = st.columns(3)
         with col1: p_sel = st.selectbox("Projeto", sorted(df_votos['Proj'].unique()))
@@ -113,15 +111,14 @@ with aba2:
             fig.update_layout(yaxis=dict(range=[0, 110]), template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- EXPORTAÇÃO HTML CORRIGIDA ---
+            # --- EXPORTAÇÃO HTML CORRIGIDA (SEM QUEBRA DE LINHA) ---
             logo_base64 = get_base64_image("logo.png")
             chart_data = pd.DataFrame(list(ponderada.items()), columns=['label', 'value'])
             chart_json = json.dumps(chart_data.to_dict(orient='records'))
             
-            # Solução definitiva: Renomear o índice e usar o index_label no to_html
+            # Gera o HTML e ajusta o cabeçalho "REGIÃO" de forma limpa
             tabela_html = tab_final.style.format("{:.1f}%").to_html(classes="table")
-            # Ajuste CSS para a primeira célula do cabeçalho aparecer como "REGIÃO"
-            tabela_html = tabela_html.replace('<th class="blank level0" >&nbsp;</th>', '<th class="index_name level0">REGIÃO</th>')
+            tabela_html = tabela_html.replace('<th class="blank level0" >&nbsp;</th>', '<th style="text-align:center">REGIÃO</th>')
 
             html_relatorio = f"""
             <html>
@@ -132,7 +129,7 @@ with aba2:
                     body {{ font-family: sans-serif; padding: 30px; color: black; background: white; }}
                     .logo-container {{ text-align: center; margin-bottom: 20px; }}
                     .logo-container img {{ max-width: 450px; }}
-                    .pergunta-header {{ font-size: 18px; font-weight: bold; margin: 25px 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }}
+                    .pergunta-header {{ font-size: 18px; font-weight: bold; text-align: left; margin: 25px 0 15px 0; border-bottom: 1px solid #333; padding-bottom: 5px; }}
                     table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }}
                     th, td {{ border: 1px solid #000; padding: 8px; text-align: center; }}
                     th {{ background: #eeeeee; font-weight: bold; }}
