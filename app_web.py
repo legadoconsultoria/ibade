@@ -51,13 +51,16 @@ with aba1:
         unidades = {u['nome']: u['id'] for u in lista_cidades}
         sel_u = st.selectbox("Unidade alvo:", list(unidades.keys()))
         n_perg = st.text_input("Pergunta")
-        alts_txt = st.text_area("Alternativas (vírgula)")
+        # Ajuste: Instrução para pergunta aberta
+        alts_txt = st.text_area("Alternativas (vírgula) - Deixe em branco para resposta aberta")
         if st.button("Publicar Pergunta"):
-            if sel_u and n_perg and alts_txt:
+            if sel_u and n_perg: # Ajuste: alts_txt não é mais obrigatório
                 resp_p = supabase.table("perguntas").insert({"cidade_id": unidades[sel_u], "texto_pergunta": n_perg}).execute()
                 p_id = resp_p.data[0]['id']
-                for a in [x.strip() for x in alts_txt.split(",")]:
-                    supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": a, "votos": 0}).execute()
+                # Ajuste: Só cadastra alternativas se o campo não estiver vazio
+                if alts_txt.strip():
+                    for a in [x.strip() for x in alts_txt.split(",") if x.strip()]:
+                        supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": a, "votos": 0}).execute()
                 st.success("Publicado!")
 
     # --- NOVO BLOCO: CLONAR E EDITAR QUESTIONÁRIO ---
@@ -79,7 +82,6 @@ with aba1:
             id_origem = unidades[sel_origem]
             id_destino = unidades[sel_destino]
             
-            # Busca as perguntas da unidade de origem
             perguntas_origem = supabase.table("perguntas").select("*").eq("cidade_id", id_origem).execute().data
             
             if perguntas_origem:
@@ -89,36 +91,32 @@ with aba1:
                     
                     for i, perg in enumerate(perguntas_origem):
                         st.markdown(f"**Questão {i+1}**")
-                        # Carrega o texto original para edição
                         n_perg = st.text_input(f"Texto da Pergunta {i+1}", value=perg['texto_pergunta'], key=f"p_{perg['id']}")
                         
-                        # Busca e junta as alternativas da pergunta
                         alts = supabase.table("alternativas").select("texto_alternativa").eq("pergunta_id", perg['id']).execute().data
                         alts_txt = ", ".join([a['texto_alternativa'] for a in alts])
                         
-                        n_alts = st.text_area(f"Alternativas (vírgula) {i+1}", value=alts_txt, key=f"a_{perg['id']}")
+                        # Ajuste: Instrução para pergunta aberta no clonador
+                        n_alts = st.text_area(f"Alternativas (vírgula) {i+1} - Deixe em branco para aberta", value=alts_txt, key=f"a_{perg['id']}")
                         dados_clonados.append({"p": n_perg, "a": n_alts})
                         st.markdown("---")
                         
                     if st.form_submit_button("Salvar Novo Questionário no Destino"):
                         try:
-                            # Faz o loop nos dados editados pelo usuário e salva no Supabase
                             for item in dados_clonados:
-                                if item["p"] and item["a"]:
+                                if item["p"]: # Ajuste: item["a"] não é mais obrigatório
                                     resp_p = supabase.table("perguntas").insert({"cidade_id": id_destino, "texto_pergunta": item["p"]}).execute()
                                     p_id = resp_p.data[0]['id']
-                                    for alt in [x.strip() for x in item["a"].split(",") if x.strip()]:
-                                        supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": alt, "votos": 0}).execute()
+                                    # Ajuste: Só clona alternativas se existirem
+                                    if item["a"].strip():
+                                        for alt in [x.strip() for x in item["a"].split(",") if x.strip()]:
+                                            supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": alt, "votos": 0}).execute()
                             st.success(f"Questionário salvo com sucesso na unidade {sel_destino}!")
                         except Exception as e:
                             st.error(f"Erro ao salvar o questionário clonado: {e}")
             else:
                 st.info(f"A unidade '{sel_origem}' não possui perguntas cadastradas para copiar.")
 
-# --- ABA 2: RELATÓRIO ---
-# --- ABA 2: RELATÓRIO ---
-# --- ABA 2: RELATÓRIO ---
-# --- ABA 2: RELATÓRIO ---
 # --- ABA 2: RELATÓRIO ---
 with aba2:
     if not df_votos.empty:
