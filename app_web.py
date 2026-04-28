@@ -45,6 +45,7 @@ with aba1:
                 supabase.table("cidades").insert({"nome": n_unid.strip(), "eleitorado": v_eleit}).execute()
                 st.success("Unidade salva!")
                 st.rerun()
+                
     with col_cad2:
         st.subheader("2. Adicionar Pergunta")
         unidades = {u['nome']: u['id'] for u in lista_cidades}
@@ -58,6 +59,61 @@ with aba1:
                 for a in [x.strip() for x in alts_txt.split(",")]:
                     supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": a, "votos": 0}).execute()
                 st.success("Publicado!")
+
+    # --- NOVO BLOCO: CLONAR E EDITAR QUESTIONÁRIO ---
+    st.divider()
+    st.subheader("3. Clonar e Editar Questionário")
+    col_origem, col_destino = st.columns(2)
+    
+    opcoes_clonagem = [""] + list(unidades.keys())
+    
+    with col_origem:
+        sel_origem = st.selectbox("Copiar da Unidade (Origem):", opcoes_clonagem)
+    with col_destino:
+        sel_destino = st.selectbox("Para a Unidade (Destino):", opcoes_clonagem)
+        
+    if sel_origem and sel_destino:
+        if sel_origem == sel_destino:
+            st.warning("A unidade de origem e a de destino não podem ser as mesmas.")
+        else:
+            id_origem = unidades[sel_origem]
+            id_destino = unidades[sel_destino]
+            
+            # Busca as perguntas da unidade de origem
+            perguntas_origem = supabase.table("perguntas").select("*").eq("cidade_id", id_origem).execute().data
+            
+            if perguntas_origem:
+                with st.form("form_clonar"):
+                    st.write(f"Faça as modificações necessárias abaixo e clique em Salvar para enviar ao projeto **{sel_destino}**:")
+                    dados_clonados = []
+                    
+                    for i, perg in enumerate(perguntas_origem):
+                        st.markdown(f"**Questão {i+1}**")
+                        # Carrega o texto original para edição
+                        n_perg = st.text_input(f"Texto da Pergunta {i+1}", value=perg['texto_pergunta'], key=f"p_{perg['id']}")
+                        
+                        # Busca e junta as alternativas da pergunta
+                        alts = supabase.table("alternativas").select("texto_alternativa").eq("pergunta_id", perg['id']).execute().data
+                        alts_txt = ", ".join([a['texto_alternativa'] for a in alts])
+                        
+                        n_alts = st.text_area(f"Alternativas (vírgula) {i+1}", value=alts_txt, key=f"a_{perg['id']}")
+                        dados_clonados.append({"p": n_perg, "a": n_alts})
+                        st.markdown("---")
+                        
+                    if st.form_submit_button("Salvar Novo Questionário no Destino"):
+                        try:
+                            # Faz o loop nos dados editados pelo usuário e salva no Supabase
+                            for item in dados_clonados:
+                                if item["p"] and item["a"]:
+                                    resp_p = supabase.table("perguntas").insert({"cidade_id": id_destino, "texto_pergunta": item["p"]}).execute()
+                                    p_id = resp_p.data[0]['id']
+                                    for alt in [x.strip() for x in item["a"].split(",") if x.strip()]:
+                                        supabase.table("alternativas").insert({"pergunta_id": p_id, "texto_alternativa": alt, "votos": 0}).execute()
+                            st.success(f"Questionário salvo com sucesso na unidade {sel_destino}!")
+                        except Exception as e:
+                            st.error(f"Erro ao salvar o questionário clonado: {e}")
+            else:
+                st.info(f"A unidade '{sel_origem}' não possui perguntas cadastradas para copiar.")
 
 # --- ABA 2: RELATÓRIO ---
 # --- ABA 2: RELATÓRIO ---
